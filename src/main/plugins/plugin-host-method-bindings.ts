@@ -1,5 +1,7 @@
 import {
+  commandsInvokeParams,
   getPluginHostMethodSpec,
+  PLUGIN_COMMAND_RESULT_MAX_BYTES,
   PLUGIN_HOST_API_V0,
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
   PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
@@ -47,6 +49,10 @@ export type PluginHostServices = {
     set(pluginId: string, key: string, value: unknown): { ok: true } | { ok: false; error: string }
   }
   subscribeEvents(pluginId: string, events: PluginEventName[]): PluginEventName[]
+  /** Runs one of `pluginId`'s own worker commands. Implementations must
+   *  enforce enablement and the manifest's declared-command rules; the
+   *  facade only supplies the authenticated plugin id. */
+  invokePluginCommand(pluginId: string, commandId: string, args?: unknown): Promise<unknown>
 }
 
 export type BoundPluginHostMethod = {
@@ -167,6 +173,23 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('events.subscribe', async (params, { pluginId, services }) => {
     const { events } = params as { events: PluginEventName[] }
     return { subscribed: services.subscribeEvents(pluginId, events) }
+  }),
+  definePluginMethod('commands.invoke', async (params, { pluginId, services }) => {
+    // Re-parse (already validated by the chokepoint) to type the params without a cast.
+    const { commandId, args } = commandsInvokeParams.parse(params)
+    const value = (await services.invokePluginCommand(pluginId, commandId, args)) ?? null
+    const serialized = JSON.stringify(value)
+    // Why: the result travels back through one bounded panel message, so an
+    // oversized value is refused rather than truncated.
+    if (
+      serialized !== undefined &&
+      Buffer.byteLength(serialized, 'utf8') > PLUGIN_COMMAND_RESULT_MAX_BYTES
+    ) {
+      throw new Error(
+        `command result exceeds the ${PLUGIN_COMMAND_RESULT_MAX_BYTES} byte limit for panel calls`
+      )
+    }
+    return { value }
   })
 ])
 
