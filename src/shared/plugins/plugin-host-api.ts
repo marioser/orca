@@ -125,7 +125,7 @@ export type PluginHostMethodSpec = {
   /** Mutations are audit-logged with actor `plugin:<id>`. */
   mutation: boolean
   /** Whether sandboxed panels may call this over the postMessage bridge.
-   *  Workers can call every method. */
+   *  Workers can call every method except `panelOnly` rows. */
   panel: boolean
   /** Callable only from a sandboxed panel; workers are denied with
    *  `worker_forbidden`. Implies `panel: true`. */

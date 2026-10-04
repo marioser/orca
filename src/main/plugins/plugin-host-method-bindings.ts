@@ -179,8 +179,10 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
     const { commandId, args } = commandsInvokeParams.parse(params)
     const value = (await services.invokePluginCommand(pluginId, commandId, args)) ?? null
     const serialized = JSON.stringify(value)
-    // Why: the result travels back through one bounded panel message, so an
-    // oversized value is refused rather than truncated.
+    // Why: a panel poll should stay small. The cap bounds the command's value
+    // (the `{ value }` wrapper and the result envelope add a few bytes; the
+    // outbound lane itself is not size-checked), and an oversized value is
+    // refused rather than truncated.
     if (
       serialized !== undefined &&
       Buffer.byteLength(serialized, 'utf8') > PLUGIN_COMMAND_RESULT_MAX_BYTES
